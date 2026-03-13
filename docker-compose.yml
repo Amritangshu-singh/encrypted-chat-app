@@ -1,0 +1,55 @@
+version: '3.9'
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: encrypted_chat_mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - chat_net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: encrypted_chat_backend
+    restart: unless-stopped
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/encrypted_chat
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - JWT_SECRET=${JWT_SECRET:-jwt-secret-change-me}
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:80
+    ports:
+      - "5000:5000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - chat_net
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - REACT_APP_API_URL=http://localhost:5000
+        - REACT_APP_SOCKET_URL=http://localhost:5000
+    container_name: encrypted_chat_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - chat_net
+
+volumes:
+  mongo_data:
+
+networks:
+  chat_net:
+    driver: bridge
